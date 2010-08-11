@@ -1,0 +1,10 @@
+v1.0.1
+======
+* Forked from v1.0 by Sam Nguyen <samuel.nguyen@panasonic.aero>
+* Fetching sqlite error message if sql_verify query fails
+* Removed uncessary sqlite_free() calls
+
+v1.0
+====
+* Released by cormander at 
+  http://cormander.com/blog/2008/04/pam_sqlite3-module-available/
