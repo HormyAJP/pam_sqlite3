@@ -1,5 +1,5 @@
-pam_sqlite3 v1.0
-=============
+pam_sqlite3 v1.0.1
+==================
 
 Introduction
 ============
@@ -19,13 +19,23 @@ pam_sqlite3 is autoconf'ed, thus, compiling should be a matter of:
     $ make
     $ make install
 
-Compilation has been tested on CentOS 5.1.
+Compilation has been tested on:
+- CentOS 5.1
+- CentOS 5.4
+- Mac OS X 10.6.4
 
-You will need to have SQLite library and header files for this
+You will need to have SQLite and PAM library and header files for this
 module to compile.
 
 See test.c for an example application that authenticates using
 this module.
+
+You can also use the pamtester utility found here:
+http://pamtester.sourceforge.net/
+
+Known Issues
+============
+- No multi-type character support
 
 Configuration
 =============
@@ -80,12 +90,18 @@ Configuration Options
     config_file         - specifies the path to a file to read for further
                           configuration options
     sql_verify          - specifies SQL template to use when verifying the
-                          the password for a user
+                          the password for a user; this query should select only
+                          the password field and does not need to be wrapped in 
+                          quotes                          
+                          Default: SELECT %Op FROM %Ot WHERE %Ou='%U'
     sql_check_expired   - SQL template to use when checking for account expiry.
+                          Default: SELECT 1 from %Ot WHERE %Ou='%U' AND (%Ox='y' OR %Ox='1')
     sql_check_newtok    - SQL template to use when checking to see if the user
                           needs to change their password.
+                          Default: SELECT 1 FROM %Ot WHERE %Ou='%U' AND (%On='y' OR %On='1')
     sql_set_passwd      - SQL template to use when updating the password for
                           and user.
+                          Default: UPDATE %Ot SET %Op='%P' WHERE %Ou='%U'
 
 
 SQL Templates
@@ -94,20 +110,17 @@ SQL Templates
 SQL templates are printf-inspired format strings.  The following escape
 sequences are understood:
 
-    %%      - literal % character
-
-    %U      - The username (provided by PAM).  It will be quoted for use
-              in the SQL.
-    %P      - The password, either entered by the user or the new password
-              to use when changing it.  It will be quoted for use in SQL.
+    %%       - literal % character
+    %U       - The username (provided by PAM).  It will be quoted for use
+               in the SQL.
+    %P       - The password, either entered by the user or the new password
+               to use when changing it.  It will be quoted for use in SQL.
 
     %O<char> - an option from the configuration; the following options are
                supported:
 
-    %Op     - value of pwd_column
-    %Ou     - value of user_column
-    %Ot     - value of table
-    %Ox     - value of expired_column
-    %On     - value of newtok_column
-
-vim:et:
+               %Op  - value of pwd_column
+               %Ou  - value of user_column
+               %Ot  - value of table
+               %Ox  - value of expired_column
+               %On  - value of newtok_column
