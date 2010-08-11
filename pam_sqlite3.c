@@ -362,14 +362,14 @@ options_valid(struct module_options *options)
 /* private: open SQLite database */
 static sqlite3 *pam_sqlite3_connect(struct module_options *options)
 {
-  char *errtext = NULL;
+  const char *errtext = NULL;
   sqlite3 *sdb = NULL;
 
   sqlite3_open(options->database, &sdb);
 
   if (NULL == sdb) {
+      errtext = sqlite3_errmsg(sdb);
 	  SYSLOG("Error opening SQLite database (%s)", errtext);
-	  free(errtext);
   }
 
   return sdb;
@@ -445,7 +445,7 @@ auth_verify_password(const char *user, const char *passwd,
 	sqlite3_stmt *vm;
 	int rc;
 	const char *tail;
-	char *errtext = NULL;
+	const char *errtext = NULL;
 	char *query;
 
 #define CRYPT_LEN 13
@@ -464,8 +464,8 @@ auth_verify_password(const char *user, const char *passwd,
 	free(query);
 
 	if (res != SQLITE_OK) {
+        errtext = sqlite3_errmsg(conn);
 		DBGLOG("Error executing SQLite query (%s)", errtext);
-		sqlite3_free(errtext);
 		return PAM_AUTH_ERR;
 	}
 	
@@ -475,7 +475,7 @@ auth_verify_password(const char *user, const char *passwd,
 		rc = PAM_USER_UNKNOWN;
 		DBGLOG("no rows to retrieve");
 	} else {
-		const char *stored_pw = sqlite3_column_text(vm, 0);
+		const char *stored_pw = (const char *) sqlite3_column_text(vm, 0);
 
 		switch(options->pw_type) {
 		case PW_CLEAR:
@@ -494,7 +494,6 @@ auth_verify_password(const char *user, const char *passwd,
 
 	sqlite3_finalize(vm);
 	sqlite3_close(conn);
-	sqlite3_free(errtext);
 	return rc;
 }
 
@@ -546,7 +545,7 @@ pam_sm_acct_mgmt(pam_handle_t *pamh, int flags, int argc,
 	sqlite3_stmt *vm;
 	char *query;
 	const char *tail;
-	char *errtext = NULL;
+	const char *errtext = NULL;
 	int res;
 
 	get_module_options(argc, argv, &options);
@@ -586,8 +585,8 @@ pam_sm_acct_mgmt(pam_handle_t *pamh, int flags, int argc,
 		free(query);
 
 		if (res != SQLITE_OK) {
+            errtext = sqlite3_errmsg(conn);
 			DBGLOG("Error executing SQLite query (%s)", errtext);
-			sqlite3_free(errtext);
 			free_module_options(options);
 			sqlite3_close(conn);
 			return PAM_AUTH_ERR;
@@ -600,7 +599,6 @@ pam_sm_acct_mgmt(pam_handle_t *pamh, int flags, int argc,
 		if(SQLITE_ROW == res) {
 			sqlite3_finalize(vm);
 			sqlite3_close(conn);
-			sqlite3_free(errtext);
 			free_module_options(options);
 			return PAM_ACCT_EXPIRED;
 		}
@@ -619,9 +617,9 @@ pam_sm_acct_mgmt(pam_handle_t *pamh, int flags, int argc,
 		free(query);
 
 		if (res != SQLITE_OK) {
+            errtext = sqlite3_errmsg(conn);
 			DBGLOG("query failed: %s", errtext);
 			sqlite3_close(conn);
-			sqlite3_free(errtext);
 			free_module_options(options);
 			return PAM_AUTH_ERR;
 		}
@@ -743,7 +741,7 @@ pam_sm_chauthtok(pam_handle_t *pamh, int flags, int argc, const char **argv)
 
 		if (SQLITE_OK != res) {
 			DBGLOG("query failed[%d]: %s", res, errtext);
-			sqlite3_free(errtext);
+            sqlite3_free(errtext);  // error strings rom sqlite3_exec must be freed
 			free(newpass_crypt);
 			free_module_options(options);
 			sqlite3_close(conn);
