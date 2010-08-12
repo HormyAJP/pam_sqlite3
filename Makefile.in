@@ -4,7 +4,6 @@ LIBOBJ=     pam_sqlite3.o pam_get_pass.o pam_std_option.o pam_get_service.o
 LIBLIB=     pam_sqlite3.so
 
 DISTDIR=    pam_sqlite3-0.1
-ROOTDIR=	
 
 LINK=		@SQLITE_LIB@
 LDLIBS=		${LINK} @LIBS@

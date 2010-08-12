@@ -3,15 +3,15 @@
 
 case "$1" in
     freebsd*)
-    echo "FreeBSD: Installing pam_sqlite3.so to /usr/lib"
+    echo "FreeBSD: Installing pam_sqlite3.so to $ROOTDIR/usr/lib"
     destdir=usr/lib
     ;;
     linux*)
-    echo "Linux: Installing pam_sqlite3.so to /lib/security"
+    echo "Linux: Installing pam_sqlite3.so to $ROOTDIR/lib/security"
     destdir=lib/security
     ;;
     *)
-    echo "Unknown: Installing pam_sqlite3.so to /lib/security"
+    echo "Unknown: Installing pam_sqlite3.so to $ROOTDIR/lib/security"
     destdir=lib/security
     ;;
 esac
