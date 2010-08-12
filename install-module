@@ -16,4 +16,8 @@ case "$1" in
     ;;
 esac
 
-install -c -m 755 -o root pam_sqlite3.so $ROOTDIR/$destdir
+if [ `id -u` -eq 0 ]; then
+    install -c -m 755 -o root pam_sqlite3.so $ROOTDIR/$destdir
+else
+    install -c -m 0755 pam_sqlite3.so $ROOTDIR/$destdir
+fi
