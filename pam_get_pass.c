@@ -34,6 +34,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <security/pam_modules.h>
+#include <security/pam_appl.h>
 #include "pam_mod_misc.h"
 
 static int   pam_conv_pass(pam_handle_t *, const char *, int);
@@ -54,7 +55,7 @@ pam_conv_pass(pam_handle_t *pamh, const char *prompt, int options)
     conv = (const struct pam_conv *)item;
     msg.msg_style = options & PAM_OPT_ECHO_PASS ?
         PAM_PROMPT_ECHO_ON : PAM_PROMPT_ECHO_OFF;
-    msg.msg = prompt;
+    msg.msg = (char *)prompt;
     msgs[0] = &msg;
     if ((retval = conv->conv(1, msgs, &resp, conv->appdata_ptr)) !=
         PAM_SUCCESS)
@@ -117,8 +118,8 @@ pam_get_confirm_pass(pam_handle_t *pamh, const char **passp, const char *prompt1
     for(i = 0; i < 2; i++)
         msgs[i].msg_style = options & PAM_OPT_ECHO_PASS ? 
             PAM_PROMPT_ECHO_ON : PAM_PROMPT_ECHO_OFF;
-    msgs[0].msg = prompt1;
-    msgs[1].msg = prompt2;
+    msgs[0].msg = (char *)prompt1;
+    msgs[1].msg = (char *)prompt2;
     pmsgs[0] = &msgs[0];
     pmsgs[1] = &msgs[1];
     
@@ -126,9 +127,9 @@ pam_get_confirm_pass(pam_handle_t *pamh, const char **passp, const char *prompt1
         return retval;
 
     if(!resp)
-        return PAM_AUTHTOK_RECOVER_ERR;
+        return PAM_AUTHTOK_RECOVERY_ERR;
     if(strcmp(resp[0].resp, resp[1].resp) != 0)
-        return PAM_AUTHTOK_RECOVER_ERR;
+        return PAM_AUTHTOK_RECOVERY_ERR;
 
     retval = pam_set_item(pamh, PAM_AUTHTOK, resp[0].resp);
     memset(resp[0].resp, 0, strlen(resp[0].resp));

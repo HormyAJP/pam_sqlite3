@@ -61,6 +61,7 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 #define PAM_SM_ACCOUNT
 #define PAM_SM_PASSWORD
 #include <security/pam_modules.h>
+#include <security/pam_appl.h>
 #include "pam_mod_misc.h"
 
 #define PASSWORD_PROMPT			"Password: "
@@ -379,7 +380,7 @@ static sqlite3 *pam_sqlite3_connect(struct module_options *options)
 static char *
 crypt_make_salt(struct module_options *options)
 {
-	int i;
+	int i __attribute__ ((unused));
 	time_t now;
 	static unsigned long x;
 	static char result[13];
