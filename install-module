@@ -7,8 +7,13 @@ case "$1" in
     destdir=usr/lib
     ;;
     linux*)
-    echo "Linux: Installing pam_sqlite3.so to $ROOTDIR/lib/security"
-    destdir=lib/security
+    if [ -d "$ROOTDIR/lib/$(uname -m)-${1}" ]; then
+        echo "Linux: Installing pam_sqlite3.so to $ROOTDIR/lib/$(uname -m)-${1}/security"
+        destdir=lib/$(uname -m)-${1}/security
+    else
+        echo "Linux: Installing pam_sqlite3.so to $ROOTDIR/lib/security"
+        destdir=lib/security
+    fi
     ;;
     *)
     echo "Unknown: Installing pam_sqlite3.so to $ROOTDIR/lib/security"
