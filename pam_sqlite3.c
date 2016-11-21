@@ -431,8 +431,10 @@ static sqlite3 *pam_sqlite3_connect(struct module_options *options)
 	  SYSLOG("Error opening SQLite database (%s)", errtext);
 	  /*
 	   * N.B. sdb is usually non-NULL when errors occur, so we explicitly
-	   * return NULL here.
+	   * release the resource and return NULL to indicate failure to the caller.
 	   */
+
+	  sqlite3_close(sdb);
 	  return NULL;
   }
 
@@ -521,7 +523,7 @@ auth_verify_password(const char *user, const char *passwd,
 	if(!(query = format_query(options->sql_verify ? options->sql_verify :
 			"SELECT %Op FROM %Ot WHERE %Ou='%U'",
 			options, user, passwd))) {
-		SYSLOG("failed to construct sql query");
+		SYSLOGERR("failed to construct sql query");
 		rc = PAM_AUTH_ERR;
 		goto done;
 	}
