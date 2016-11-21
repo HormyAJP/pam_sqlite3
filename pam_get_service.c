@@ -7,11 +7,11 @@
 #include <security/pam_appl.h>
 #include <string.h>
 
-const char *pam_get_service(pam_handle_t *pamh)
-{
-    const char *service = NULL;
+static const char* UNKNOWN_SERVICE = "<Unknown Service>";
 
-	if(pam_get_item(pamh, PAM_SERVICE, (void *) &service) != PAM_SUCCESS)
-        return NULL;
-    return service;
+const char* pam_get_service(pam_handle_t *pamh, const char **service)
+{
+	if (pam_get_item(pamh, PAM_SERVICE, (const void**)service) != PAM_SUCCESS)
+        *service = UNKNOWN_SERVICE;
+    return *service;
 }
