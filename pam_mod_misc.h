@@ -1,6 +1,6 @@
-/* 
+/*
  * Copyright (c) 2000. Leon Breedt, , Copyright (c) 2002 David D.W. Downey
- * Modified FreeBSD version 
+ * Modified FreeBSD version
  */
 /*-
  * Copyright 1998 Juniper Networks, Inc.
@@ -46,10 +46,10 @@
 
 __BEGIN_DECLS
 int  pam_get_pass(pam_handle_t *, const char **, const char *, int);
-int  pam_get_confirm_pass(pam_handle_t *, const char **, const char *,  
+int  pam_get_confirm_pass(pam_handle_t *, const char **, const char *,
         const char *, int);
 int  pam_std_option(int *, const char *);
-const char *pam_get_service(pam_handle_t *pamh);
+const char *pam_get_service(pam_handle_t *pamh, const char **service);
 __END_DECLS
 
 #endif

@@ -6,7 +6,7 @@
  * Extended SQL configuration support by Wez Furlong <wez@thebrainroom.com>
  *
  * Based in part on pam_pgsql.c by David D.W. Downey ("pgpkeys") <david-downey@codecastle.com>
- * 
+ *
  * Based in part on pam_unix.c of FreeBSD.
  *
                           pam_sqlite3
@@ -78,7 +78,8 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 						  openlog("PAM_sqlite3", LOG_PID, LOG_AUTH); \
 						  syslog(LOG_INFO, ##x);					\
 						  closelog();								\
-					  } while(0);
+					  } while(0)
+#define SYSLOGERR(x...) SYSLOG("Error: " x)
 
 typedef enum {
 	PW_CLEAR = 1,
@@ -103,12 +104,19 @@ struct module_options {
 	char *sql_set_passwd;
 };
 
-#define GROW(x)		if (x > buflen - dest - 1) {       \
-	char *grow;                                        \
-	buflen += 256 + x;                                 \
-	grow = realloc(buf, buflen + 256 + x);             \
-	if (grow == NULL) { free(buf); return NULL; }      \
-	buf = grow;                                        \
+#define FAIL(MSG) 		\
+	{ 					\
+		SYSLOGERR(MSG);	\
+		free(buf); 		\
+		return NULL; 	\
+	}
+
+#define GROW(x)		if (x > buflen - dest - 1) {       		\
+	char *grow;                                        		\
+	buflen += 256 + x;                                 		\
+	grow = realloc(buf, buflen + 256 + x);             		\
+	if (grow == NULL) FAIL("Out of memory building query"); \
+	buf = grow;                                        		\
 }
 
 #define APPEND(str, len)	GROW(len); memcpy(buf + dest, str, len); dest += len
@@ -116,10 +124,22 @@ struct module_options {
 
 #define MAX_ZSQL -1
 
+/*
+ * Being very defensive here. The current logic in the rest of the code should prevent this from
+ * happening. But lets protect against future code changes which could cause a NULL ptr to creep
+ * in.
+ */
+#define CHECK_STRING(str) 													 	\
+	if (!str) 															    	\
+		FAIL("Internal error in format_query: string ptr " #str " was NULL");
+
 static char *format_query(const char *template, struct module_options *options,
 	const char *user, const char *passwd)
 {
 	char *buf = malloc(256);
+	if (!buf)
+		return NULL;
+
 	int buflen = 256;
 	int dest = 0, len;
 	const char *src = template;
@@ -135,12 +155,14 @@ static char *format_query(const char *template, struct module_options *options,
 				len = pct - src;
 				APPEND(src, len);
 			}
-			
+
 			/* decode the escape */
 			switch(pct[1]) {
 				case 'U':	/* username */
 					if (user) {
 						tmp = sqlite3_mprintf("%q", user);
+						if (!tmp)
+							FAIL("sqlite3_mprintf out of memory");
 						len = strlen(tmp);
 						APPEND(tmp, len);
 						sqlite3_free(tmp);
@@ -149,6 +171,8 @@ static char *format_query(const char *template, struct module_options *options,
 				case 'P':	/* password */
 					if (passwd) {
 						tmp = sqlite3_mprintf("%q", passwd);
+						if (!tmp)
+							FAIL("sqlite3_mprintf out of memory");
 						len = strlen(tmp);
 						APPEND(tmp, len);
 						sqlite3_free(tmp);
@@ -159,27 +183,32 @@ static char *format_query(const char *template, struct module_options *options,
 					pct++;
 					switch (pct[1]) {
 						case 'p':	/* passwd */
+							CHECK_STRING(options->pwd_column);
 							APPENDS(options->pwd_column);
 							break;
 						case 'u':	/* username */
+							CHECK_STRING(options->user_column);
 							APPENDS(options->user_column);
 							break;
 						case 't':	/* table */
+							CHECK_STRING(options->table);
 							APPENDS(options->table);
 							break;
 						case 'x':	/* expired */
+							CHECK_STRING(options->expired_column);
 							APPENDS(options->expired_column);
 							break;
 						case 'n':	/* newtok */
+							CHECK_STRING(options->newtok_column);
 							APPENDS(options->newtok_column);
 							break;
 					}
 					break;
-					
+
 				case '%':	/* quoted % sign */
 					APPEND(pct, 1);
 					break;
-					
+
 				default:	/* unknown */
 					APPEND(pct, 2);
 					break;
@@ -200,6 +229,17 @@ static char *format_query(const char *template, struct module_options *options,
 static void
 get_module_options_from_file(const char *filename, struct module_options *opts, int warn);
 
+/*
+ * safe_assign protects against duplicate config options causing a memory leak.
+ */
+static void inline
+safe_assign(char **asignee, const char *val)
+{
+	if(*asignee)
+		free(*asignee);
+	*asignee = strdup(val);
+}
+
 /* private: parse and set the specified string option */
 static void
 set_module_option(const char *option, struct module_options *options)
@@ -211,12 +251,17 @@ set_module_option(const char *option, struct module_options *options)
 		return;
 
 	buf = strdup(option);
+	if(!buf)
+		return;
 
 	if((eq = strchr(buf, '='))) {
 		end = eq - 1;
 		val = eq + 1;
 		if(end <= buf || !*val)
+		{
+			free(buf);
 			return;
+		}
 		while(end > buf && isspace(*end))
 			end--;
 		end++;
@@ -230,17 +275,17 @@ set_module_option(const char *option, struct module_options *options)
 	DBGLOG("setting option: %s=>%s\n", buf, val);
 
 	if(!strcmp(buf, "database")) {
-		options->database = strdup(val);
+		safe_assign(&options->database, val);
 	} else if(!strcmp(buf, "table")) {
-		options->table = strdup(val);
+		safe_assign(&options->table, val);
 	} else if(!strcmp(buf, "user_column")) {
-		options->user_column = strdup(val);
+		safe_assign(&options->user_column, val);
 	} else if(!strcmp(buf, "pwd_column")) {
-		options->pwd_column = strdup(val);
+		safe_assign(&options->pwd_column, val);
 	} else if(!strcmp(buf, "expired_column")) {
-		options->expired_column = strdup(val);
+		safe_assign(&options->expired_column, val);
 	} else if(!strcmp(buf, "newtok_column")) {
-		options->newtok_column = strdup(val);
+		safe_assign(&options->newtok_column, val);
 	} else if(!strcmp(buf, "pw_type")) {
 		options->pw_type = PW_CLEAR;
 		if(!strcmp(val, "crypt")) {
@@ -256,13 +301,15 @@ set_module_option(const char *option, struct module_options *options)
 	} else if (!strcmp(buf, "config_file")) {
 		get_module_options_from_file(val, options, 1);
 	} else if (!strcmp(buf, "sql_verify")) {
-		options->sql_verify = strdup(val);
+		safe_assign(&options->sql_verify, val);
 	} else if (!strcmp(buf, "sql_check_expired")) {
-		options->sql_check_expired = strdup(val);
+		safe_assign(&options->sql_check_expired, val);
 	} else if (!strcmp(buf, "sql_check_newtok")) {
-		options->sql_check_newtok = strdup(val);
+		safe_assign(&options->sql_check_newtok, val);
 	} else if (!strcmp(buf, "sql_set_passwd")) {
-		options->sql_set_passwd = strdup(val);
+		safe_assign(&options->sql_set_passwd, val);
+	} else {
+		DBGLOG("ignored option: %s\n", buf);
 	}
 
 	free(buf);
@@ -296,16 +343,20 @@ get_module_options_from_file(const char *filename, struct module_options *opts, 
 }
 
 /* private: read module options from file or commandline */
-static int 
+static int
 get_module_options(int argc, const char **argv, struct module_options **options)
 {
 	int i, rc;
 	struct module_options *opts;
 
-	opts = (struct module_options *)malloc(sizeof *opts);
+	rc = 0;
+	if (!(opts = (struct module_options *)malloc(sizeof *opts))){
+		*options = NULL;
+		return rc;
+	}
+
 	bzero(opts, sizeof(*opts));
 	opts->pw_type = PW_CLEAR;
-	rc = 0;
 
 	get_module_options_from_file(CONF, opts, 0);
 
@@ -323,6 +374,9 @@ get_module_options(int argc, const char **argv, struct module_options **options)
 static void
 free_module_options(struct module_options *options)
 {
+	if (!options)
+		return;
+
 	if(options->database)
 		free(options->database);
 	if(options->table)
@@ -352,9 +406,15 @@ free_module_options(struct module_options *options)
 static int
 options_valid(struct module_options *options)
 {
-	if(options->database == 0 || options->table == 0 || options->user_column == 0) 
+	if(!options)
 	{
-		SYSLOG("the database, table and user_column options are required.");
+		SYSLOGERR("failed to read options.");
+		return -1;
+	}
+
+	if(options->database == 0 || options->table == 0 || options->user_column == 0)
+	{
+		SYSLOGERR("the database, table and user_column options are required.");
 		return -1;
 	}
 	return 0;
@@ -366,11 +426,16 @@ static sqlite3 *pam_sqlite3_connect(struct module_options *options)
   const char *errtext = NULL;
   sqlite3 *sdb = NULL;
 
-  sqlite3_open(options->database, &sdb);
-
-  if (NULL == sdb) {
+  if (sqlite3_open(options->database, &sdb) != SQLITE_OK) {
       errtext = sqlite3_errmsg(sdb);
 	  SYSLOG("Error opening SQLite database (%s)", errtext);
+	  /*
+	   * N.B. sdb is usually non-NULL when errors occur, so we explicitly
+	   * release the resource and return NULL to indicate failure to the caller.
+	   */
+
+	  sqlite3_close(sdb);
+	  return NULL;
   }
 
   return sdb;
@@ -385,7 +450,7 @@ crypt_make_salt(struct module_options *options)
 	static unsigned long x;
 	static char result[13];
 	static char salt_chars[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789./";
-		
+	static const int NUM_SALT_CHARS = sizeof(salt_chars) / sizeof(salt_chars[0]);
 
 	time(&now);
 	x += now + getpid() + clock();
@@ -393,8 +458,8 @@ crypt_make_salt(struct module_options *options)
 
 	switch(options->pw_type) {
 	case PW_CRYPT:
-		result[0] = salt_chars[random() % 64];
-		result[1] = salt_chars[random() % 64];
+		result[0] = salt_chars[random() % NUM_SALT_CHARS];
+		result[1] = salt_chars[random() % NUM_SALT_CHARS];
 		result[2] = '\0';
 		break;
 #if HAVE_MD5_CRYPT
@@ -403,7 +468,7 @@ crypt_make_salt(struct module_options *options)
 		result[1]='1';
 		result[2]='$';
 		for (i=3; i<11; i++) {
-			result[i] = salt_chars[random() % 64];
+			result[i] = salt_chars[random() % NUM_SALT_CHARS];
 		}
 		result[11] = '$';
 		result[12]='\0';
@@ -438,39 +503,43 @@ encrypt_password(struct module_options *options, const char *pass)
 
 /* private: authenticate user and passwd against database */
 static int
-auth_verify_password(const char *user, const char *passwd, 
+auth_verify_password(const char *user, const char *passwd,
 					 struct module_options *options)
 {
 	int res;
-	sqlite3 *conn;
-	sqlite3_stmt *vm;
-	int rc;
-	const char *tail;
+	sqlite3 *conn = NULL;
+	sqlite3_stmt *vm = NULL;
+	int rc = PAM_AUTH_ERR;
+	const char *tail  = NULL;
 	const char *errtext = NULL;
-	char *query;
+	const char *encrypted_pw = NULL;
+	char *query  = NULL;
 
-#define CRYPT_LEN 13
+	if(!(conn = pam_sqlite3_connect(options))) {
+		rc = PAM_AUTH_ERR;
+		goto done;
+	}
 
-	if(!(conn = pam_sqlite3_connect(options)))
-		return PAM_AUTH_ERR;
-
-	query = format_query(options->sql_verify ? options->sql_verify :
+	if(!(query = format_query(options->sql_verify ? options->sql_verify :
 			"SELECT %Op FROM %Ot WHERE %Ou='%U'",
-			options, user, passwd);
+			options, user, passwd))) {
+		SYSLOGERR("failed to construct sql query");
+		rc = PAM_AUTH_ERR;
+		goto done;
+	}
 
 	DBGLOG("query: %s", query);
-	
+
 	res = sqlite3_prepare(conn, query, MAX_ZSQL, &vm, &tail);
-   
+
 	free(query);
 
 	if (res != SQLITE_OK) {
         errtext = sqlite3_errmsg(conn);
 		DBGLOG("Error executing SQLite query (%s)", errtext);
-		return PAM_AUTH_ERR;
+		rc = PAM_AUTH_ERR;
+		goto done;
 	}
-	
-	rc = PAM_AUTH_ERR;
 
 	if (SQLITE_ROW != sqlite3_step(vm)) {
 		rc = PAM_USER_UNKNOWN;
@@ -478,21 +547,35 @@ auth_verify_password(const char *user, const char *passwd,
 	} else {
 		const char *stored_pw = (const char *) sqlite3_column_text(vm, 0);
 
+		if (!stored_pw) {
+			SYSLOG("sqlite3 failed to return row data");
+			rc = PAM_AUTH_ERR;
+			goto done;
+		}
+
 		switch(options->pw_type) {
 		case PW_CLEAR:
 			if(strcmp(passwd, stored_pw) == 0)
 				rc = PAM_SUCCESS;
 			break;
 #if HAVE_MD5_CRYPT
-		case PW_MD5: 
+		case PW_MD5:
 #endif
 		case PW_CRYPT:
-			if(strcmp(crypt(passwd, stored_pw), stored_pw) == 0)
+			encrypted_pw = crypt(passwd, stored_pw);
+			if (!encrypted_pw) {
+				SYSLOG("crypt failed when encrypting password");
+				rc = PAM_AUTH_ERR;
+				goto done;
+			}
+
+			if(strcmp(encrypted_pw, stored_pw) == 0)
 				rc = PAM_SUCCESS;
 			break;
 		}
 	}
 
+done:
 	sqlite3_finalize(vm);
 	sqlite3_close(conn);
 	return rc;
@@ -502,36 +585,36 @@ auth_verify_password(const char *user, const char *passwd,
 PAM_EXTERN int
 pam_sm_authenticate(pam_handle_t *pamh, int flags, int argc, const char **argv)
 {
-	struct module_options *options;
-	const char *user, *password;
+	struct module_options *options = NULL;
+	const char *user = NULL, *password = NULL, *service = NULL;
 	int rc, std_flags;
-
-	if((rc = pam_get_user(pamh, &user, NULL)) != PAM_SUCCESS)
-		return rc;
 
 	std_flags = get_module_options(argc, argv, &options);
 	if(options_valid(options) != 0) {
-		free_module_options(options);
-		return PAM_AUTH_ERR;
+		rc = PAM_AUTH_ERR;
+		goto done;
+	}
+
+	if((rc = pam_get_user(pamh, &user, NULL)) != PAM_SUCCESS) {
+		SYSLOG("failed to get username from pam");
+		goto done;
 	}
 
 	DBGLOG("attempting to authenticate: %s", user);
 
-	if((rc = pam_get_pass(pamh, &password, PASSWORD_PROMPT, std_flags) 
+	if((rc = pam_get_pass(pamh, &password, PASSWORD_PROMPT, std_flags)
 		!= PAM_SUCCESS)) {
-		free_module_options(options);
-		return rc;
+		goto done;
 	}
 
-	if((rc = auth_verify_password(user, password, options)) != PAM_SUCCESS) {
-		free_module_options(options);
-		return rc;
-	}
+	if((rc = auth_verify_password(user, password, options)) != PAM_SUCCESS)
+		SYSLOG("(%s) user %s not authenticated.", pam_get_service(pamh, &service), user);
+	else
+		SYSLOG("(%s) user %s authenticated.", pam_get_service(pamh, &service), user);
 
-	SYSLOG("(%s) user %s authenticated.", pam_get_service(pamh), user);
+done:
 	free_module_options(options);
-
-	return PAM_SUCCESS;
+	return rc;
 }
 
 /* public: check if account has expired, or needs new password */
@@ -539,46 +622,50 @@ PAM_EXTERN int
 pam_sm_acct_mgmt(pam_handle_t *pamh, int flags, int argc,
 							const char **argv)
 {
-	struct module_options *options;
-	const char *user;
-	int rc;
-	sqlite3 *conn;
-	sqlite3_stmt *vm;
-	char *query;
-	const char *tail;
+	struct module_options *options = NULL;
+	const char *user = NULL;
+	int rc = PAM_AUTH_ERR;
+	sqlite3 *conn = NULL;
+	sqlite3_stmt *vm = NULL;
+	char *query = NULL;
+	const char *tail = NULL;
 	const char *errtext = NULL;
 	int res;
 
 	get_module_options(argc, argv, &options);
 	if(options_valid(options) != 0) {
-		free_module_options(options);
-		return PAM_AUTH_ERR;
+		rc = PAM_AUTH_ERR;
+		goto done;
 	}
 
 	/* both not specified, just succeed. */
-	if(options->expired_column == 0 && options->newtok_column == 0) {
-		free_module_options(options);
-		return PAM_SUCCESS;
+	if(options->expired_column == NULL && options->newtok_column == NULL) {
+		rc = PAM_SUCCESS;
+		goto done;
 	}
 
 	if((rc = pam_get_user(pamh, &user, NULL)) != PAM_SUCCESS) {
-		SYSLOG("could not retrieve user");
-		free_module_options(options);
-		return rc;
+		SYSLOGERR("could not retrieve user");
+		goto done;
 	}
 
 	if(!(conn = pam_sqlite3_connect(options))) {
-		free_module_options(options);
-		return PAM_AUTH_ERR;
+		SYSLOGERR("could not connect to database");
+		rc = PAM_AUTH_ERR;
+		goto done;
 	}
 
 	/* if account has expired then expired_column = '1' or 'y' */
 	if(options->expired_column || options->sql_check_expired) {
-	
-		query = format_query(options->sql_check_expired ? options->sql_check_expired :
+
+		if(!(query = format_query(options->sql_check_expired ? options->sql_check_expired :
 				"SELECT 1 from %Ot WHERE %Ou='%U' AND (%Ox='y' OR %Ox='1')",
-				options, user, NULL);
-		
+				options, user, NULL))) {
+			SYSLOGERR("failed to construct sql query");
+			rc = PAM_AUTH_ERR;
+			goto done;
+		}
+
 		DBGLOG("query: %s", query);
 
 		res = sqlite3_prepare(conn, query, MAX_ZSQL, &vm, &tail);
@@ -587,10 +674,9 @@ pam_sm_acct_mgmt(pam_handle_t *pamh, int flags, int argc,
 
 		if (res != SQLITE_OK) {
             errtext = sqlite3_errmsg(conn);
-			DBGLOG("Error executing SQLite query (%s)", errtext);
-			free_module_options(options);
-			sqlite3_close(conn);
-			return PAM_AUTH_ERR;
+			SYSLOGERR("Error executing SQLite query (%s)", errtext);
+			rc = PAM_AUTH_ERR;
+			goto done;
 		}
 
 		res = sqlite3_step(vm);
@@ -598,19 +684,22 @@ pam_sm_acct_mgmt(pam_handle_t *pamh, int flags, int argc,
 		DBGLOG("query result: %d", res);
 
 		if(SQLITE_ROW == res) {
-			sqlite3_finalize(vm);
-			sqlite3_close(conn);
-			free_module_options(options);
-			return PAM_ACCT_EXPIRED;
+			rc = PAM_ACCT_EXPIRED;
+			goto done;
 		}
 		sqlite3_finalize(vm);
+		vm = NULL;
 	}
 
 	/* if new password is required then newtok_column = 'y' or '1' */
 	if(options->newtok_column || options->sql_check_newtok) {
-		query = format_query(options->sql_check_newtok ? options->sql_check_newtok :
+		if(!(query = format_query(options->sql_check_newtok ? options->sql_check_newtok :
 				"SELECT 1 FROM %Ot WHERE %Ou='%U' AND (%On='y' OR %On='1')",
-				options, user, NULL);
+				options, user, NULL))) {
+			SYSLOGERR("failed to construct sql query");
+			rc = PAM_AUTH_ERR;
+			goto done;
+		}
 
 		DBGLOG("query: %s", query);
 
@@ -619,54 +708,54 @@ pam_sm_acct_mgmt(pam_handle_t *pamh, int flags, int argc,
 
 		if (res != SQLITE_OK) {
             errtext = sqlite3_errmsg(conn);
-			DBGLOG("query failed: %s", errtext);
-			sqlite3_close(conn);
-			free_module_options(options);
-			return PAM_AUTH_ERR;
+			SYSLOGERR("query failed: %s", errtext);
+			rc = PAM_AUTH_ERR;
+			goto done;
 		}
 
 		res = sqlite3_step(vm);
 
 		if(SQLITE_ROW == res) {
-			sqlite3_finalize(vm);
-			sqlite3_close(conn);
-			free_module_options(options);
-			return PAM_NEW_AUTHTOK_REQD;
+			rc = PAM_NEW_AUTHTOK_REQD;
+			goto done;
 		}
 		sqlite3_finalize(vm);
+		vm = NULL;
 	}
 
+	rc = PAM_SUCCESS;
+
+done:
+	/* Do all cleanup in one place. */
+	sqlite3_finalize(vm);
 	sqlite3_close(conn);
-	return PAM_SUCCESS;
+	free_module_options(options);
+	return rc;
 }
 
 /* public: change password */
 PAM_EXTERN int
 pam_sm_chauthtok(pam_handle_t *pamh, int flags, int argc, const char **argv)
 {
-	struct module_options *options;
-	int rc, std_flags;
-	const char *user, *pass, *newpass;
-	char *newpass_crypt;
-	sqlite3 *conn;
+	struct module_options *options = NULL;
+	int rc = PAM_AUTH_ERR;
+	int std_flags;
+	const char *user = NULL, *pass = NULL, *newpass = NULL, *service = NULL;
+	char *newpass_crypt = NULL;
+	sqlite3 *conn = NULL;
 	char *errtext = NULL;
-	char *query;
+	char *query = NULL;
 	int res;
 
 	std_flags = get_module_options(argc, argv, &options);
 	if(options_valid(options) != 0) {
-		free_module_options(options);
-		return PAM_AUTH_ERR;
+		rc = PAM_AUTH_ERR;
+		goto done;
 	}
 
 	if((rc = pam_get_user(pamh, &user, NULL)) != PAM_SUCCESS) {
-		free_module_options(options);
-		return rc;
-	}
-
-	if(!(conn = pam_sqlite3_connect(options))) {
-		free_module_options(options);
-		return PAM_AUTH_ERR;
+		SYSLOGERR("could not retrieve user");
+		goto done;
 	}
 
 	if(flags & PAM_PRELIM_CHECK) {
@@ -675,65 +764,64 @@ pam_sm_chauthtok(pam_handle_t *pamh, int flags, int argc, const char **argv)
 			if((rc = auth_verify_password(user, pass, options)) == PAM_SUCCESS) {
 				rc = pam_set_item(pamh, PAM_OLDAUTHTOK, (const void *)pass);
 				if(rc != PAM_SUCCESS) {
-					SYSLOG("failed to set PAM_OLDAUTHTOK!");
+					SYSLOGERR("failed to set PAM_OLDAUTHTOK!");
 				}
-				free_module_options(options);
-				return rc;
+				goto done;
 			} else {
-				DBGLOG("password verification failed for '%s'", user);
-				return rc;
+				SYSLOG("password verification failed for '%s'", user);
+				goto done;
 			}
 		} else {
-			SYSLOG("could not retrieve password from '%s'", user);
-			return PAM_AUTH_ERR;
+			SYSLOGERR("could not retrieve password from '%s'", user);
+			goto done;
 		}
 	} else if(flags & PAM_UPDATE_AUTHTOK) {
-		pass = newpass = NULL;
 		rc = pam_get_item(pamh, PAM_OLDAUTHTOK, (const void **) &pass);
 		if(rc != PAM_SUCCESS) {
-			SYSLOG("could not retrieve old token");
-			free_module_options(options);
-			return rc;
+			SYSLOGERR("could not retrieve old token");
+			goto done;
 		}
 		rc = auth_verify_password(user, pass, options);
 		if(rc != PAM_SUCCESS) {
-			SYSLOG("(%s) user '%s' not authenticated.", pam_get_service(pamh), user);
-			free_module_options(options);
-			return rc;
+			SYSLOG("(%s) user '%s' not authenticated.", pam_get_service(pamh, &service), user);
+			goto done;
 		}
 
 		/* get and confirm the new passwords */
 		rc = pam_get_confirm_pass(pamh, &newpass, PASSWORD_PROMPT_NEW, PASSWORD_PROMPT_CONFIRM, std_flags);
 		if(rc != PAM_SUCCESS) {
-			SYSLOG("could not retrieve new authentication tokens");
-			free_module_options(options);
-			return rc;
+			SYSLOGERR("could not retrieve new authentication tokens");
+			goto done;
 		}
 
 		/* save the new password for subsequently stacked modules */
 		rc = pam_set_item(pamh, PAM_AUTHTOK, (const void *)newpass);
 		if(rc != PAM_SUCCESS) {
-			SYSLOG("failed to set PAM_AUTHTOK!");
-			free_module_options(options);
-			return rc;
+			SYSLOGERR("failed to set PAM_AUTHTOK!");
+			goto done;
 		}
 
 		/* update the database */
 		if(!(newpass_crypt = encrypt_password(options, newpass))) {
-			free_module_options(options);
-			DBGLOG("passwd encrypt failed");
-			return PAM_BUF_ERR;
+			SYSLOGERR("passwd encrypt failed");
+			rc = PAM_BUF_ERR;
+			goto done;
 		}
 		if(!(conn = pam_sqlite3_connect(options))) {
-			free_module_options(options);
-			return PAM_AUTHINFO_UNAVAIL;
+			SYSLOGERR("could not connect to database");
+			rc = PAM_AUTHINFO_UNAVAIL;
+			goto done;
 		}
 
 		DBGLOG("creating query");
 
-		query = format_query(options->sql_set_passwd ? options->sql_set_passwd :
+		if(!(query = format_query(options->sql_set_passwd ? options->sql_set_passwd :
 				"UPDATE %Ot SET %Op='%P' WHERE %Ou='%U'",
-				options, user, newpass_crypt);
+				options, user, newpass_crypt))) {
+			SYSLOGERR("failed to construct sql query");
+			rc = PAM_AUTH_ERR;
+			goto done;
+		}
 
 		DBGLOG("query: %s", query);
 
@@ -741,22 +829,24 @@ pam_sm_chauthtok(pam_handle_t *pamh, int flags, int argc, const char **argv)
 		free(query);
 
 		if (SQLITE_OK != res) {
-			DBGLOG("query failed[%d]: %s", res, errtext);
+			SYSLOGERR("query failed[%d]: %s", res, errtext);
             sqlite3_free(errtext);  // error strings rom sqlite3_exec must be freed
-			free(newpass_crypt);
-			free_module_options(options);
-			sqlite3_close(conn);
-			return PAM_AUTH_ERR;
+			rc = PAM_AUTH_ERR;
+			goto done;
 		}
-	
+
 		/* if we get here, we must have succeeded */
-		free(newpass_crypt);
-		sqlite3_close(conn);
 	}
 
+	SYSLOG("(%s) password for '%s' was changed.", pam_get_service(pamh, &service), user);
+	rc = PAM_SUCCESS;
+
+done:
+	/* Do all cleanup in one place. */
+	sqlite3_close(conn);
+	free(newpass_crypt);
 	free_module_options(options);
-	SYSLOG("(%s) password for '%s' was changed.", pam_get_service(pamh), user);
-	return PAM_SUCCESS;
+	return rc;
 }
 
 /* public: just succeed. */
