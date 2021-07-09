@@ -445,7 +445,7 @@ static sqlite3 *pam_sqlite3_connect(struct module_options *options)
 static char *
 crypt_make_salt(struct module_options *options)
 {
-	int i __attribute__ ((unused));
+	int i;
 	time_t now;
 	static unsigned long x;
 	static char result[13];
@@ -456,10 +456,14 @@ crypt_make_salt(struct module_options *options)
 	x += now + getpid() + clock();
 	srandom(x);
 
+	for (i=0; i<=11; i++) {
+		result[i] = salt_chars[random() % NUM_SALT_CHARS];
+	}
+	result[i+1] = '$';
+	result[i+2]='\0';
+
 	switch(options->pw_type) {
 	case PW_CRYPT:
-		result[0] = salt_chars[random() % NUM_SALT_CHARS];
-		result[1] = salt_chars[random() % NUM_SALT_CHARS];
 		result[2] = '\0';
 		break;
 #if HAVE_MD5_CRYPT
@@ -467,11 +471,6 @@ crypt_make_salt(struct module_options *options)
 		result[0]='$';
 		result[1]='1';
 		result[2]='$';
-		for (i=3; i<11; i++) {
-			result[i] = salt_chars[random() % NUM_SALT_CHARS];
-		}
-		result[11] = '$';
-		result[12]='\0';
 		break;
 #endif
 	default:
