@@ -448,7 +448,7 @@ crypt_make_salt(struct module_options *options)
 	int i;
 	time_t now;
 	static unsigned long x;
-	static char result[13];
+	static char result[22];
 	static char salt_chars[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789./";
 	static const int NUM_SALT_CHARS = sizeof(salt_chars) / sizeof(salt_chars[0]);
 
@@ -456,7 +456,7 @@ crypt_make_salt(struct module_options *options)
 	x += now + getpid() + clock();
 	srandom(x);
 
-	for (i=0; i<=11; i++) {
+	for (i=0; i<19; i++) {
 		result[i] = salt_chars[random() % NUM_SALT_CHARS];
 	}
 	result[i+1] = '$';
