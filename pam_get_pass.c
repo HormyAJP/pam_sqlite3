@@ -39,6 +39,12 @@
 
 static int   pam_conv_pass(pam_handle_t *, const char *, int);
 
+void memzero_explicit(void *s, size_t cnt)
+{
+    memset(s, 0, cnt);
+    __asm__ __volatile__("": :"r"(s): "memory");
+}
+
 static int
 pam_conv_pass(pam_handle_t *pamh, const char *prompt, int options)
 {
@@ -63,7 +69,7 @@ pam_conv_pass(pam_handle_t *pamh, const char *prompt, int options)
     if ((retval = pam_set_item(pamh, PAM_AUTHTOK, resp[0].resp)) !=
         PAM_SUCCESS)
         return retval;
-    memset(resp[0].resp, 0, strlen(resp[0].resp));
+    memzero_explicit(resp[0].resp, strlen(resp[0].resp));
     free(resp[0].resp);
     free(resp);
     return PAM_SUCCESS;
@@ -132,8 +138,8 @@ pam_get_confirm_pass(pam_handle_t *pamh, const char **passp, const char *prompt1
         return PAM_AUTHTOK_RECOVERY_ERR;
 
     retval = pam_set_item(pamh, PAM_AUTHTOK, resp[0].resp);
-    memset(resp[0].resp, 0, strlen(resp[0].resp));
-    memset(resp[1].resp, 0, strlen(resp[1].resp));
+    memzero_explicit(resp[0].resp, strlen(resp[0].resp));
+    memzero_explicit(resp[1].resp, strlen(resp[1].resp));
     free(resp[0].resp);
     free(resp[1].resp);
     free(resp);
