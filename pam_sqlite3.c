@@ -86,6 +86,12 @@ typedef enum {
 #if HAVE_MD5_CRYPT
 	PW_MD5,
 #endif
+#if HAVE_SHA256_CRYPT
+	PW_SHA256,
+#endif
+#if HAVE_SHA512_CRYPT
+	PW_SHA512,
+#endif
 	PW_CRYPT,
 } pw_scheme;
 
@@ -296,6 +302,16 @@ set_module_option(const char *option, struct module_options *options)
 			options->pw_type = PW_MD5;
 		}
 #endif
+#if HAVE_SHA256_CRYPT
+		else if(!strcmp(val, "sha-256")) {
+			options->pw_type = PW_SHA256;
+		}
+#endif
+#if HAVE_SHA512_CRYPT
+		else if(!strcmp(val, "sha-512")) {
+			options->pw_type = PW_SHA512;
+		}
+#endif
 	} else if(!strcmp(buf, "debug")) {
 		options->debug = 1;
 	} else if (!strcmp(buf, "config_file")) {
@@ -473,6 +489,20 @@ crypt_make_salt(struct module_options *options)
 		result[2]='$';
 		break;
 #endif
+#if HAVE_SHA256_CRYPT
+	case PW_SHA256:
+		result[0]='$';
+		result[1]='5';
+		result[2]='$';
+		break;
+#endif
+#if HAVE_SHA512_CRYPT
+	case PW_SHA512:
+		result[0]='$';
+		result[1]='6';
+		result[2]='$';
+		break;
+#endif
 	default:
 		result[0] = '\0';
 	}
@@ -489,6 +519,12 @@ encrypt_password(struct module_options *options, const char *pass)
 	switch(options->pw_type) {
 #if HAVE_MD5_CRYPT
 		case PW_MD5:
+#endif
+#if HAVE_SHA256_CRYPT
+		case PW_SHA256:
+#endif
+#if HAVE_SHA512_CRYPT
+		case PW_SHA512:
 #endif
 		case PW_CRYPT:
 			s = strdup(crypt(pass, crypt_make_salt(options)));
@@ -559,6 +595,12 @@ auth_verify_password(const char *user, const char *passwd,
 			break;
 #if HAVE_MD5_CRYPT
 		case PW_MD5:
+#endif
+#if HAVE_SHA256_CRYPT
+		case PW_SHA256:
+#endif
+#if HAVE_SHA512_CRYPT
+		case PW_SHA512:
 #endif
 		case PW_CRYPT:
 			encrypted_pw = crypt(passwd, stored_pw);

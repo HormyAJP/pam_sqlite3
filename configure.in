@@ -28,7 +28,7 @@ AC_DEFUN(AC_CRYPT_CAP,[
     AC_DEFINE(HAVE_CRYPT, 1, [ ])
   ])
   fi
-  
+
   AC_CACHE_CHECK(for standard DES crypt, ac_cv_crypt_des,[
   AC_TRY_RUN([
 #if HAVE_CRYPT_H
@@ -93,7 +93,7 @@ main() {
 #if HAVE_CRYPT
     char salt[15], answer[40];
 
-    salt[0]='$'; salt[1]='1'; salt[2]='$'; 
+    salt[0]='$'; salt[1]='1'; salt[2]='$';
     salt[3]='r'; salt[4]='a'; salt[5]='s';
     salt[6]='m'; salt[7]='u'; salt[8]='s';
     salt[9]='l'; salt[10]='e'; salt[11]='$';
@@ -131,7 +131,7 @@ dnl    fi
 main() {
 #if HAVE_CRYPT
     char salt[30], answer[70];
-    
+
     salt[0]='$'; salt[1]='2'; salt[2]='a'; salt[3]='$'; salt[4]='0'; salt[5]='7'; salt[6]='$'; salt[7]='\0';
     strcat(salt,"rasmuslerd............");
     strcpy(answer,salt);
@@ -154,6 +154,85 @@ main() {
     ac_result=0
   fi
   AC_DEFINE_UNQUOTED(HAVE_BLOWFISH_CRYPT, $ac_result, [Whether the system supports BlowFish salt])
+
+  AC_CACHE_CHECK(for SHA-256 crypt, ac_cv_crypt_sha256,[
+  AC_TRY_RUN([
+#if HAVE_CRYPT_H
+#include <crypt.h>
+#endif
+
+main() {
+#if HAVE_CRYPT
+    char salt[15], answer[56];
+
+    salt[0]='$'; salt[1]='5'; salt[2]='$';
+    salt[3]='r'; salt[4]='a'; salt[5]='s';
+    salt[6]='m'; salt[7]='u'; salt[8]='s';
+    salt[9]='l'; salt[10]='e'; salt[11]='$';
+    salt[12]='\0';
+    strcpy(answer,salt);
+    strcat(answer,"zT/mnnwZ08rpjUkGny1q7nyMdeK9jsZ2n191fLovz64");
+    exit (strcmp((char *)crypt("rasmuslerdorf",salt),answer));
+#else
+	exit(0);
+#endif
+}],[
+    ac_cv_crypt_sha256=yes
+  ],[
+    ac_cv_crypt_sha256=no
+  ],[
+    ac_cv_crypt_sha256=no
+  ])
+  ])
+  if test "$ac_cv_crypt_sha256" = "yes"; then
+    ac_result=1
+  else
+dnl    if test "$ac_cv_crypt_des" != "yes"; then
+dnl      PHP_DEBUG_MACRO(debug.log)
+dnl    fi
+    ac_result=0
+  fi
+  AC_DEFINE_UNQUOTED(HAVE_SHA256_CRYPT, $ac_result, [Whether the system supports SHA256 salt])
+
+  AC_CACHE_CHECK(for SHA-512 crypt, ac_cv_crypt_sha512,[
+  AC_TRY_RUN([
+#if HAVE_CRYPT_H
+#include <crypt.h>
+#endif
+
+main() {
+#if HAVE_CRYPT
+    char salt[15], answer[100];
+
+    salt[0]='$'; salt[1]='6'; salt[2]='$';
+    salt[3]='r'; salt[4]='a'; salt[5]='s';
+    salt[6]='m'; salt[7]='u'; salt[8]='s';
+    salt[9]='l'; salt[10]='e'; salt[11]='$';
+    salt[12]='\0';
+    strcpy(answer,salt);
+    strcat(answer,"ZRs4F6hXxPTFC/fISAvfOHHPgJRnuvYLVtveKEpuDxOja47nB.HHTYRj9MMn4AL0UVzzFPnkYkdA2wSEcV/if.");
+    exit (strcmp((char *)crypt("rasmuslerdorf",salt),answer));
+#else
+	exit(0);
+#endif
+}],[
+    ac_cv_crypt_sha512=yes
+  ],[
+    ac_cv_crypt_sha512=no
+  ],[
+    ac_cv_crypt_sha512=no
+  ])
+  ])
+  if test "$ac_cv_crypt_sha512" = "yes"; then
+    ac_result=1
+  else
+dnl    if test "$ac_cv_crypt_des" != "yes"; then
+dnl      PHP_DEBUG_MACRO(debug.log)
+dnl    fi
+    ac_result=0
+  fi
+  AC_DEFINE_UNQUOTED(HAVE_SHA512_CRYPT, $ac_result, [Whether the system supports SHA512 salt])
+
 ])
 
 AC_CRYPT_CAP
@@ -170,10 +249,10 @@ done
 
 old_LDFLAGS="$LDFLAGS"
 LDFLAGS="$LDFLAGS -L$SQLITE_DIR/lib"
-AC_CHECK_LIB(sqlite3, sqlite3_open, 
+AC_CHECK_LIB(sqlite3, sqlite3_open,
     [LIBS="$LIBS -lsqlite3"
      SQLITE_LIB=-L$SQLITE_DIR/lib
-    ], 
+    ],
     [AC_MSG_ERROR(could not determine SQLite library location)])
 LDFLAGS="$old_LDFLAGS"
 
@@ -183,8 +262,8 @@ if test "`uname`" = "Linux" >/dev/null 2>/dev/null; then
 fi
 
 AC_MSG_CHECKING(for debug build)
-AC_ARG_ENABLE(debug, 
-[  --enable-debug            Enable debugging routines], 
+AC_ARG_ENABLE(debug,
+[  --enable-debug            Enable debugging routines],
 [AC_MSG_RESULT(yes)
     AC_DEFINE(DEBUG)
     CFLAGS="-g -DDEBUG $CFLAGS"],
