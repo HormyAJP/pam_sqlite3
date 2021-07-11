@@ -885,6 +885,8 @@ pam_sm_chauthtok(pam_handle_t *pamh, int flags, int argc, const char **argv)
 done:
 	/* Do all cleanup in one place. */
 	sqlite3_close(conn);
+	if (newpass_crypt != NULL)
+		memzero_explicit(newpass_crypt, strlen(newpass_crypt));
 	free(newpass_crypt);
 	free_module_options(options);
 	return rc;
