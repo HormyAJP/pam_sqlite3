@@ -86,7 +86,8 @@ Configuration Options
     debug               - this is a standard module option that will enable
                           debug output to syslog (takes no values)
     pw_type             - specifies the password encryption scheme, can be one
-                          of 'clear', 'md5', or 'crypt'. defaults to 'clear'.
+                          of 'clear', 'md5', 'sha-256', 'sha-512' or 'crypt'.
+                          defaults to 'clear'.
     config_file         - specifies the path to a file to read for further
                           configuration options
     sql_verify          - specifies SQL template to use when verifying the

@@ -37,3 +37,9 @@
 
 /* Define if your system crypt() supports blowfish encryption */
 #undef HAVE_BLOWFISH_CRYPT
+
+/* Define if your system crypt() supports SHA-256 encryption */
+#undef HAVE_SHA256_CRYPT
+
+/* Define if your system crypt() supports SHA-512 encryption */
+#undef HAVE_SHA512_CRYPT

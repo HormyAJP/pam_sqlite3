@@ -86,6 +86,12 @@ typedef enum {
 #if HAVE_MD5_CRYPT
 	PW_MD5,
 #endif
+#if HAVE_SHA256_CRYPT
+	PW_SHA256,
+#endif
+#if HAVE_SHA512_CRYPT
+	PW_SHA512,
+#endif
 	PW_CRYPT,
 } pw_scheme;
 
@@ -296,6 +302,16 @@ set_module_option(const char *option, struct module_options *options)
 			options->pw_type = PW_MD5;
 		}
 #endif
+#if HAVE_SHA256_CRYPT
+		else if(!strcmp(val, "sha-256")) {
+			options->pw_type = PW_SHA256;
+		}
+#endif
+#if HAVE_SHA512_CRYPT
+		else if(!strcmp(val, "sha-512")) {
+			options->pw_type = PW_SHA512;
+		}
+#endif
 	} else if(!strcmp(buf, "debug")) {
 		options->debug = 1;
 	} else if (!strcmp(buf, "config_file")) {
@@ -445,10 +461,10 @@ static sqlite3 *pam_sqlite3_connect(struct module_options *options)
 static char *
 crypt_make_salt(struct module_options *options)
 {
-	int i __attribute__ ((unused));
+	int i;
 	time_t now;
 	static unsigned long x;
-	static char result[13];
+	static char result[22];
 	static char salt_chars[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789./";
 	static const int NUM_SALT_CHARS = sizeof(salt_chars) / sizeof(salt_chars[0]);
 
@@ -456,10 +472,14 @@ crypt_make_salt(struct module_options *options)
 	x += now + getpid() + clock();
 	srandom(x);
 
+	for (i=0; i<19; i++) {
+		result[i] = salt_chars[random() % NUM_SALT_CHARS];
+	}
+	result[i+1] = '$';
+	result[i+2]='\0';
+
 	switch(options->pw_type) {
 	case PW_CRYPT:
-		result[0] = salt_chars[random() % NUM_SALT_CHARS];
-		result[1] = salt_chars[random() % NUM_SALT_CHARS];
 		result[2] = '\0';
 		break;
 #if HAVE_MD5_CRYPT
@@ -467,11 +487,20 @@ crypt_make_salt(struct module_options *options)
 		result[0]='$';
 		result[1]='1';
 		result[2]='$';
-		for (i=3; i<11; i++) {
-			result[i] = salt_chars[random() % NUM_SALT_CHARS];
-		}
-		result[11] = '$';
-		result[12]='\0';
+		break;
+#endif
+#if HAVE_SHA256_CRYPT
+	case PW_SHA256:
+		result[0]='$';
+		result[1]='5';
+		result[2]='$';
+		break;
+#endif
+#if HAVE_SHA512_CRYPT
+	case PW_SHA512:
+		result[0]='$';
+		result[1]='6';
+		result[2]='$';
 		break;
 #endif
 	default:
@@ -490,6 +519,12 @@ encrypt_password(struct module_options *options, const char *pass)
 	switch(options->pw_type) {
 #if HAVE_MD5_CRYPT
 		case PW_MD5:
+#endif
+#if HAVE_SHA256_CRYPT
+		case PW_SHA256:
+#endif
+#if HAVE_SHA512_CRYPT
+		case PW_SHA512:
 #endif
 		case PW_CRYPT:
 			s = strdup(crypt(pass, crypt_make_salt(options)));
@@ -560,6 +595,12 @@ auth_verify_password(const char *user, const char *passwd,
 			break;
 #if HAVE_MD5_CRYPT
 		case PW_MD5:
+#endif
+#if HAVE_SHA256_CRYPT
+		case PW_SHA256:
+#endif
+#if HAVE_SHA512_CRYPT
+		case PW_SHA512:
 #endif
 		case PW_CRYPT:
 			encrypted_pw = crypt(passwd, stored_pw);
@@ -844,6 +885,8 @@ pam_sm_chauthtok(pam_handle_t *pamh, int flags, int argc, const char **argv)
 done:
 	/* Do all cleanup in one place. */
 	sqlite3_close(conn);
+	if (newpass_crypt != NULL)
+		memzero_explicit(newpass_crypt, strlen(newpass_crypt));
 	free(newpass_crypt);
 	free_module_options(options);
 	return rc;

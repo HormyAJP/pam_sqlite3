@@ -50,6 +50,7 @@ int  pam_get_confirm_pass(pam_handle_t *, const char **, const char *,
         const char *, int);
 int  pam_std_option(int *, const char *);
 const char *pam_get_service(pam_handle_t *pamh, const char **service);
+void memzero_explicit(void *s, size_t cnt);
 __END_DECLS
 
 #endif
