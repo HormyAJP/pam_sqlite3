@@ -15,8 +15,7 @@ Note, though, you'll probably need to use some NSS library linked to the SQlite 
 Compilation & Installation
 ==========================
 
-**1.** You will need to have SQLite and PAM library and header files for this module to compile. 
-In practice, in Ubuntu this means having "libsqlite3-dev" and "libpam0g-dev" packages installed and, in Fedora, having "sqlite-devel" and "pam-devel" ones (besides "sqlite" package, of course)
+**1.** You will need to have SQLite and PAM library and header files for this module to compile. In practice, in Ubuntu this means having "libsqlite3-dev" and "libpam0g-dev" packages installed and, in Fedora, having "sqlite-devel" and "pam-devel" ones (besides "sqlite" package, of course)
 
 
 **2.** pam_sqlite3 is autoconf'ed, thus, compiling should be a matter of:
@@ -51,6 +50,7 @@ account     required    pam_sqlite3.so
 password    required    pam_sqlite3.so
 
 *Tip: Comment any default "pam_unix.so" line if you want pam_slite3 to be the only PAM method to be used.
+    
 *Tip: Put "auth sufficient pam_sqlite3.so" instead of "auth required pam_sqlite3.so" before existing any default "pam_unix.so" line if you want to combine both PAM methods, one after another
 
 
@@ -70,8 +70,8 @@ password    required    pam_sqlite3.so
 
 **3.-** Once desired configuration is done, we will be already able to create the database schema. For example: 
 
-CREATE TABLE accounts (user_name TEXT PRIMARY KEY, user_password TEXT NOT NULL, password_type INTEGER DEFAULT 4, acc_expired TEXT DEFAULT "0", acc_new_pwreq TEXT DEFAULT "0");
-INSERT INTO accounts (user_name, user_password) VALUES ("pepe","1234");
+    CREATE TABLE accounts (user_name TEXT PRIMARY KEY, user_password TEXT NOT NULL, password_type INTEGER DEFAULT 4, acc_expired TEXT DEFAULT "0", acc_new_pwreq TEXT DEFAULT "0");
+    INSERT INTO accounts (user_name, user_password) VALUES ("pepe","1234");
 
 
 Configuration Options
