@@ -37,7 +37,8 @@ Compilation has been tested on:
 
 Known Issues
 ============
-- No multi-type character support
+
+No multi-type character support
 
 
 Configuration
@@ -55,14 +56,14 @@ password    required    pam_sqlite3.so
 
 **2.-** Configure the database, and table the module should use with the configuration file /etc/pam_sqlite3.conf. An example of this file:
 
-database = /etc/users.db
-table = accounts
-user_column = user_name
-pwd_column = user_password
-pwd_type_column = password_type
-expired_column = acc_expired
-newtok_column = acc_new_pwreq
-debug
+    database = /etc/users.db
+    table = accounts
+    user_column = user_name
+    pwd_column = user_password
+    pwd_type_column = password_type
+    expired_column = acc_expired
+    newtok_column = acc_new_pwreq
+    debug
 
 (you should read the "Configuration Options" section in this README to know the meaning of each one).
 
