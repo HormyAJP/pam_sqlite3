@@ -12,6 +12,8 @@ module.
 
 Compilation & Installation
 ==========================
+first install required packages:
+    $ sudo apt install libpam0g-dev
 
 pam_sqlite3 is autoconf'ed, thus, compiling should be a matter of:
 

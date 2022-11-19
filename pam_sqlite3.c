@@ -66,8 +66,9 @@ Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
 #define PASSWORD_PROMPT			"Password: "
 #define PASSWORD_PROMPT_NEW		"New password: "
-#define PASSWORD_PROMPT_CONFIRM "Confirm new password: "
-#define CONF					"/etc/pam_sqlite3.conf"
+#define PASSWORD_PROMPT_CONFIRM         "Confirm new password: "
+#define PASSWORD_TYPE_PROMT             "password type (1: plane, 2: MD5, 3: SHA256, 4: SHA512, 5: ENCRYPTED):"
+#define CONF				"/etc/pam_sqlite3.conf"
 
 #define DBGLOG(x...)  if(options->debug) {							\
 						  openlog("PAM_sqlite3", LOG_PID, LOG_AUTH); \
@@ -100,9 +101,10 @@ struct module_options {
 	char *table;
 	char *user_column;
 	char *pwd_column;
+	char *pwd_type_column;
 	char *expired_column;
 	char *newtok_column;
-	pw_scheme pw_type;
+	pw_scheme default_pw_type;
 	int debug;
 	char *sql_verify;
 	char *sql_check_expired;
@@ -191,6 +193,10 @@ static char *format_query(const char *template, struct module_options *options,
 						case 'p':	/* passwd */
 							CHECK_STRING(options->pwd_column);
 							APPENDS(options->pwd_column);
+							break;
+						case 'k':	/* passwd type */
+						CHECK_STRING(options->pwd_type_column);
+							APPENDS(options->pwd_type_column);
 							break;
 						case 'u':	/* username */
 							CHECK_STRING(options->user_column);
@@ -288,28 +294,30 @@ set_module_option(const char *option, struct module_options *options)
 		safe_assign(&options->user_column, val);
 	} else if(!strcmp(buf, "pwd_column")) {
 		safe_assign(&options->pwd_column, val);
+	} else if(!strcmp(buf, "pwd_type_column")) {
+		safe_assign(&options->pwd_type_column, val);
 	} else if(!strcmp(buf, "expired_column")) {
 		safe_assign(&options->expired_column, val);
 	} else if(!strcmp(buf, "newtok_column")) {
 		safe_assign(&options->newtok_column, val);
-	} else if(!strcmp(buf, "pw_type")) {
-		options->pw_type = PW_CLEAR;
+	} else if(!strcmp(buf, "default_pw_type")) {
+		options->default_pw_type = PW_CLEAR;
 		if(!strcmp(val, "crypt")) {
-			options->pw_type = PW_CRYPT;
+			options->default_pw_type = PW_CRYPT;
 		}
 #if HAVE_MD5_CRYPT
 		else if(!strcmp(val, "md5")) {
-			options->pw_type = PW_MD5;
+			options->default_pw_type = PW_MD5;
 		}
 #endif
 #if HAVE_SHA256_CRYPT
 		else if(!strcmp(val, "sha-256")) {
-			options->pw_type = PW_SHA256;
+			options->default_pw_type = PW_SHA256;
 		}
 #endif
 #if HAVE_SHA512_CRYPT
 		else if(!strcmp(val, "sha-512")) {
-			options->pw_type = PW_SHA512;
+			options->default_pw_type = PW_SHA512;
 		}
 #endif
 	} else if(!strcmp(buf, "debug")) {
@@ -372,7 +380,7 @@ get_module_options(int argc, const char **argv, struct module_options **options)
 	}
 
 	bzero(opts, sizeof(*opts));
-	opts->pw_type = PW_CLEAR;
+	opts->default_pw_type = PW_CLEAR;
 
 	get_module_options_from_file(CONF, opts, 0);
 
@@ -459,7 +467,7 @@ static sqlite3 *pam_sqlite3_connect(struct module_options *options)
 
 /* private: generate random salt character */
 static char *
-crypt_make_salt(struct module_options *options)
+crypt_make_salt(pw_scheme pw_type)
 {
 	int i;
 	time_t now;
@@ -478,7 +486,7 @@ crypt_make_salt(struct module_options *options)
 	result[i+1] = '$';
 	result[i+2]='\0';
 
-	switch(options->pw_type) {
+	switch(pw_type) {
 	case PW_CRYPT:
 		result[2] = '\0';
 		break;
@@ -512,11 +520,11 @@ crypt_make_salt(struct module_options *options)
 
 /* private: encrypt password using the preferred encryption scheme */
 static char *
-encrypt_password(struct module_options *options, const char *pass)
+encrypt_password(pw_scheme pw_type, const char *pass)
 {
 	char *s = NULL;
 
-	switch(options->pw_type) {
+	switch(pw_type) {
 #if HAVE_MD5_CRYPT
 		case PW_MD5:
 #endif
@@ -527,7 +535,7 @@ encrypt_password(struct module_options *options, const char *pass)
 		case PW_SHA512:
 #endif
 		case PW_CRYPT:
-			s = strdup(crypt(pass, crypt_make_salt(options)));
+			s = strdup(crypt(pass, crypt_make_salt(pw_type)));
 			break;
 		case PW_CLEAR:
 		default:
@@ -542,6 +550,7 @@ auth_verify_password(const char *user, const char *passwd,
 					 struct module_options *options)
 {
 	int res;
+	pw_scheme pw_type = PW_CLEAR;
 	sqlite3 *conn = NULL;
 	sqlite3_stmt *vm = NULL;
 	int rc = PAM_AUTH_ERR;
@@ -556,7 +565,7 @@ auth_verify_password(const char *user, const char *passwd,
 	}
 
 	if(!(query = format_query(options->sql_verify ? options->sql_verify :
-			"SELECT %Op FROM %Ot WHERE %Ou='%U'",
+			"SELECT %Op, %Ok FROM %Ot WHERE %Ou='%U'",
 			options, user, passwd))) {
 		SYSLOGERR("failed to construct sql query");
 		rc = PAM_AUTH_ERR;
@@ -581,18 +590,19 @@ auth_verify_password(const char *user, const char *passwd,
 		DBGLOG("no rows to retrieve");
 	} else {
 		const char *stored_pw = (const char *) sqlite3_column_text(vm, 0);
-
 		if (!stored_pw) {
 			SYSLOG("sqlite3 failed to return row data");
 			rc = PAM_AUTH_ERR;
 			goto done;
 		}
 
-		switch(options->pw_type) {
-		case PW_CLEAR:
-			if(strcmp(passwd, stored_pw) == 0)
-				rc = PAM_SUCCESS;
-			break;
+		pw_type = sqlite3_column_int(vm, 1);
+		if (!pw_type)
+			pw_type = PW_CLEAR;
+
+		SYSLOG("pw type: %d", pw_type);
+
+		switch(pw_type) {
 #if HAVE_MD5_CRYPT
 		case PW_MD5:
 #endif
@@ -611,6 +621,12 @@ auth_verify_password(const char *user, const char *passwd,
 			}
 
 			if(strcmp(encrypted_pw, stored_pw) == 0)
+				rc = PAM_SUCCESS;
+			break;
+
+		/* PW_CLEAR */
+		default:
+			if(strcmp(passwd, stored_pw) == 0)
 				rc = PAM_SUCCESS;
 			break;
 		}
@@ -782,11 +798,12 @@ pam_sm_chauthtok(pam_handle_t *pamh, int flags, int argc, const char **argv)
 	int rc = PAM_AUTH_ERR;
 	int std_flags;
 	const char *user = NULL, *pass = NULL, *newpass = NULL, *service = NULL;
-	char *newpass_crypt = NULL;
+	char *newpass_crypt = NULL, *pass_type = NULL;
 	sqlite3 *conn = NULL;
 	char *errtext = NULL;
 	char *query = NULL;
 	int res;
+	pw_scheme pw_type;
 
 	std_flags = get_module_options(argc, argv, &options);
 	if(options_valid(options) != 0) {
@@ -842,8 +859,22 @@ pam_sm_chauthtok(pam_handle_t *pamh, int flags, int argc, const char **argv)
 			goto done;
 		}
 
+		/* get password type from user */
+		rc = pam_conversation(pamh, PASSWORD_TYPE_PROMT, std_flags, &pass_type);
+		if(rc != PAM_SUCCESS) {
+			SYSLOGERR("failed to get pass type!");
+			goto done;
+		}
+
+		pw_type = atoi(pass_type);
+		if(pw_type == 0) {
+			SYSLOGERR("invalid pw type str!");
+			rc = PAM_SYMBOL_ERR;
+			goto done;
+		}
+
 		/* update the database */
-		if(!(newpass_crypt = encrypt_password(options, newpass))) {
+		if(!(newpass_crypt = encrypt_password(pw_type, newpass))) {
 			SYSLOGERR("passwd encrypt failed");
 			rc = PAM_BUF_ERR;
 			goto done;
