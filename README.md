@@ -45,9 +45,9 @@ Configuration
 
 **1.-** For the service you wish the module to be used, you need to edit the /etc/pam.d/<service> file (or /etc/pam.d/common-{auth,account,password} files in Ubuntu/Debian or /etc/pam.d/systemd-auth in Fedora), and add the relevant lines. For example:
 
-auth        required    pam_sqlite3.so 
-account     required    pam_sqlite3.so
-password    required    pam_sqlite3.so
+    auth        required    pam_sqlite3.so 
+    account     required    pam_sqlite3.so
+    password    required    pam_sqlite3.so
 
 *Tip: Comment any default "pam_unix.so" line if you want pam_slite3 to be the only PAM method to be used.
     
