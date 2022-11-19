@@ -1,4 +1,4 @@
-**pam_sqlite3 v1.0.1**
+**pam_sqlite3 v1.0.2**
 ======================
 
 
@@ -15,11 +15,11 @@ Note, though, you'll probably need to use some NSS library linked to the SQlite 
 Compilation & Installation
 ==========================
 
-**1.**You will need to have SQLite and PAM library and header files for this module to compile. 
+**1.** You will need to have SQLite and PAM library and header files for this module to compile. 
 In practice, in Ubuntu this means having "libsqlite3-dev" and "libpam0g-dev" packages installed and, in Fedora, having "sqlite-devel" and "pam-devel" ones (besides "sqlite" package, of course)
 
 
-**2.**pam_sqlite3 is autoconf'ed, thus, compiling should be a matter of:
+**2.** pam_sqlite3 is autoconf'ed, thus, compiling should be a matter of:
 
     $ ./configure
     $ make
@@ -32,7 +32,7 @@ Compilation has been tested on:
 - Mac OS X 10.6.4
 
 
-**3.**See test.c for an example application that authenticates using this module. You can also use the pamtester utility found here: http://pamtester.sourceforge.net
+**3.** See test.c for an example application that authenticates using this module. You can also use the pamtester utility found here: http://pamtester.sourceforge.net
 
 
 Known Issues
@@ -43,7 +43,7 @@ Known Issues
 Configuration
 =============
 
-**1.-**For the service you wish the module to be used, you need to edit the /etc/pam.d/<service> file (or /etc/pam.d/common-{auth,account,password} files in Ubuntu/Debian or /etc/pam.d/systemd-auth in Fedora), and add the relevant lines. For example:
+**1.-** For the service you wish the module to be used, you need to edit the /etc/pam.d/<service> file (or /etc/pam.d/common-{auth,account,password} files in Ubuntu/Debian or /etc/pam.d/systemd-auth in Fedora), and add the relevant lines. For example:
 
 auth        required    pam_sqlite3.so 
 account     required    pam_sqlite3.so
@@ -53,7 +53,7 @@ password    required    pam_sqlite3.so
 *Tip: Put "auth sufficient pam_sqlite3.so" instead of "auth required pam_sqlite3.so" before existing any default "pam_unix.so" line if you want to combine both PAM methods, one after another
 
 
-**2.-**Configure the database, and table the module should use with the configuration file /etc/pam_sqlite3.conf. An example of this file:
+**2.-** Configure the database, and table the module should use with the configuration file /etc/pam_sqlite3.conf. An example of this file:
 
 database = /etc/users.db
 table = accounts
@@ -67,7 +67,7 @@ debug
 (you should read the "Configuration Options" section in this README to know the meaning of each one).
 
 
-**3.-**Once desired configuration is done, we will be already able to create the database schema. For example: 
+**3.-** Once desired configuration is done, we will be already able to create the database schema. For example: 
 
 CREATE TABLE accounts (user_name TEXT PRIMARY KEY, user_password TEXT NOT NULL, password_type INTEGER DEFAULT 4, acc_expired TEXT DEFAULT "0", acc_new_pwreq TEXT DEFAULT "0");
 INSERT INTO accounts (user_name, user_password) VALUES ("pepe","1234");
