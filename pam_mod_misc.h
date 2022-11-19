@@ -45,6 +45,7 @@
 #define PAM_OPT_ECHO_PASS		0x20
 
 __BEGIN_DECLS
+int pam_conversation(pam_handle_t *pamh, const char *prompt, int options, char **res);
 int  pam_get_pass(pam_handle_t *, const char **, const char *, int);
 int  pam_get_confirm_pass(pam_handle_t *, const char **, const char *,
         const char *, int);
