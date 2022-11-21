@@ -19,17 +19,15 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#ifndef PAM_MOD_MISC_H
-#define PAM_MOD_MISC_H
+#ifndef PAM_SQLITE3_CONVERSATION_H
+#define PAM_SQLITE3_CONVERSATION_H
 
-#include <sys/cdefs.h>
+#include <security/pam_modules.h>
 
-/* Options */
-#define PAM_OPT_DEBUG			0x01
-#define PAM_OPT_NO_WARN			0x02
-#define PAM_OPT_USE_FIRST_PASS		0x04
-#define	PAM_OPT_TRY_FIRST_PASS		0x08
-#define PAM_OPT_USE_MAPPED_PASS		0x10
-#define PAM_OPT_ECHO_PASS		0x20
+int pam_conversation(pam_handle_t *pamh, const char *prompt, int options, char **res);
+int pam_get_pass(pam_handle_t *pamh, const char **passp,
+		 const char *prompt, int options);
+int pam_get_confirm_pass(pam_handle_t *pamh, const char **passp,
+			 const char *prompt1, const char *prompt2, int options);
 
-#endif
+#endif //PAM_SQLITE3_CONVERSATION_H
