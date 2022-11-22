@@ -19,17 +19,18 @@
  * Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA 02110-1301 USA
  */
 
-#ifndef PAM_MOD_MISC_H
-#define PAM_MOD_MISC_H
+#ifndef PAM_SQLITE3_PAM_SQLITE3_DB_H
+#define PAM_SQLITE3_PAM_SQLITE3_DB_H
 
-#include <sys/cdefs.h>
+#include <sqlite3.h>
 
-/* Options */
-#define PAM_OPT_DEBUG			0x01
-#define PAM_OPT_NO_WARN			0x02
-#define PAM_OPT_USE_FIRST_PASS		0x04
-#define	PAM_OPT_TRY_FIRST_PASS		0x08
-#define PAM_OPT_USE_MAPPED_PASS		0x10
-#define PAM_OPT_ECHO_PASS		0x20
+#include "pam_sqlite3.h"
 
-#endif
+sqlite3 *pam_sqlite3_connect(struct module_options *options);
+char *format_query(const char *template, struct module_options *options,
+                   const char *user, const char *passwd);
+int db_get_passwd_info(const char *user, const char *passwd,
+		       struct module_options *options,
+		       char **stored_passwd, passwd_scheme *stored_passwd_type);
+
+#endif //PAM_SQLITE3_PAM_SQLITE3_DB_H

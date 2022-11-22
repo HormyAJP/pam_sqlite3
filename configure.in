@@ -1,7 +1,7 @@
 dnl Configure template for pam_sqlite3
 dnl $Id: configure.in,v 1.7 2003/06/22 22:59:45 ek Exp $
 
-AC_INIT(pam_get_pass.c)
+AC_INIT(pam_sqlite3.c)
 AC_CONFIG_HEADER(config.h)
 
 dnl Checks for libraries.
